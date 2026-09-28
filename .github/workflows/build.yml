@@ -1,0 +1,35 @@
+name: Build custom launcher APK
+on:
+  workflow_dispatch:
+    inputs:
+      app_name:
+        description: "App name"
+        default: "MyLauncher"
+      app_id:
+        description: "Application ID"
+        default: "com.me.mylauncher"
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Get this kit
+        uses: actions/checkout@v4
+        with: { path: kit }
+      - name: Get MojoLauncher
+        run: git clone --recursive --depth 1 https://github.com/MojoLauncher/MojoLauncher mojo
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: 17 }
+      - name: Apply mods
+        working-directory: mojo
+        run: |
+          bash ../kit/customize.sh "${{ inputs.app_name }}" "${{ inputs.app_id }}"
+          F=$(find app_pojavlauncher/src/main/java -name LauncherActivity.java | head -1)
+          sed -i '0,/super\.onCreate(.*);/s//&\n        PreloadInstaller.install(this);/' "$F"
+          git diff --stat
+      - name: Build APK
+        working-directory: mojo
+        run: ./gradlew :app_pojavlauncher:assembleDebug --no-daemon
+      - uses: actions/upload-artifact@v4
+        with:
+          name: launcher-apk
+          path: mojo/app_pojavlauncher/build/outputs/apk/debug/*.apk
